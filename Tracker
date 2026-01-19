@@ -1,37 +1,23 @@
-local Tracker = {
-	["Note"] = "VPS_4"
-}
-
-local UPDATE_INTERVAL = 15
+print("Starting Tracking")
+local UPDATE_INTERVAL = 45
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local HttpService = game:GetService("HttpService")
 local Players = game:GetService("Players")
 local LocalPlayer = Players.LocalPlayer
-
--- Versuch, Fsys sicher zu laden
-local Fsys, ClientData
-local success, err = pcall(function()
-    Fsys = require(ReplicatedStorage:WaitForChild("Fsys"))
-    ClientData = Fsys.load("ClientData")
-end)
-
-if not success then
-    warn("❌ Konnte ClientData nicht laden: " .. tostring(err))
-    return -- Script stoppen, wenn Data nicht geladen werden kann
-end
+local Fsys = require(ReplicatedStorage:WaitForChild("Fsys"))
+local ClientData = Fsys.load("ClientData")
 
 local SUPABASE_URL = "https://wcasmkanukpsuhidtwwy.supabase.co/rest/v1/bot_stats"
 local API_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6IndjYXNta2FudWtwc3VoaWR0d3d5Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3Njg0MTc4MjMsImV4cCI6MjA4Mzk5MzgyM30.WbUQ9vXUvM5Rd_FMQNa1Zr8E3jkBhVKLdxI-0f5k-4o"
 
 local SESSION_START = os.date("!%Y-%m-%dT%H:%M:%SZ")
-
 local function get_current_stats()
 	local bucks = ClientData.get_server(LocalPlayer, "money")
 	if not bucks or bucks == 0 then
 		local rawData = ClientData.get_data()[LocalPlayer.Name]
 		if rawData then bucks = rawData.money end
 	end
-	bucks = bucks or 0
+	bucks = bucks or 0 
 
 	local agePotionsCount = 0
 	local data = ClientData.get_data()[LocalPlayer.Name]
@@ -44,21 +30,11 @@ local function get_current_stats()
 	end
 	return bucks, agePotionsCount
 end
-
-print("✅ Stats function loaded")
-
--- Initial Stats setzen
 local sB, sP = get_current_stats()
 if not getgenv().StartBucks then getgenv().StartBucks = sB end
 if not getgenv().StartPotions then getgenv().StartPotions = sP end
 
 print("✅ Tracker Started at: " .. SESSION_START)
-
--- Prüfen ob request funktion existiert
-local requestFunc = request or http_request or (http and http.request) or (syn and syn.request)
-if not requestFunc then
-    game.Players.LocalPlayer:Kick("Dein Executor unterstützt keine HTTP Requests!")
-end
 
 while task.wait(UPDATE_INTERVAL) do
 	local currentBucks, currentPotions = get_current_stats()
@@ -75,26 +51,21 @@ while task.wait(UPDATE_INTERVAL) do
 		session_start = SESSION_START
 	}
 
-    -- URL bereinigen (Leerzeichen entfernen)
-    local cleanUrl = SUPABASE_URL:gsub("%s+", "") .. "?on_conflict=username"
+	pcall(function()
+		local requestFunc = request or http_request or (http and http.request) or (syn and syn.request)
+		if not requestFunc then return end
 
-	local response = requestFunc({
-		Url = cleanUrl,
-		Method = "POST",
-		Headers = {
-			["apikey"] = API_KEY,
-			["Authorization"] = "Bearer " .. API_KEY,
-			["Content-Type"] = "application/json",
-			["Prefer"] = "resolution=merge-duplicates"
-		},
-		Body = HttpService:JSONEncode(payload)
-	})
-
-    -- Fehler-Ausgabe zur Diagnose
-    if response.Success then
-        print("Inventory gesendet!")
-    else
-        warn("Fehler beim Senden: " .. tostring(response.StatusCode) .. " - " .. tostring(response.StatusMessage))
-        -- Wenn hier SSL Fail steht, liegt es zu 100% am Executor/Internet
-    end
+		local cleanUrl = string.gsub(SUPABASE_URL, "%s+", "")
+		requestFunc({
+			Url = cleanUrl .. "?on_conflict=username", 
+			Method = "POST",
+			Headers = {
+				["apikey"] = API_KEY,
+				["Authorization"] = "Bearer " .. API_KEY,
+				["Content-Type"] = "application/json",
+				["Prefer"] = "resolution=merge-duplicates"
+			},
+			Body = HttpService:JSONEncode(payload)
+		})
+	end)
 end
